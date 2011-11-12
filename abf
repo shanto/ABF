@@ -1,0 +1,138 @@
+#!/bin/bash
+
+## Constants
+. /etc/abf/abf.conf
+
+build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
+	echo "Building packages ($packages) for ${repo_name} (${arch})..."
+		repo_dest=$VAR_DIR/repo/$repo_name
+		repo_out=$(mktemp --tmpdir -d ${repo_name}-build-XXX)
+
+		[[ -d ${repo_dest}/any ]] || mkdir -p ${repo_dest}/any
+		[[ -d ${repo_dest}/$arch ]] || mkdir -p ${repo_dest}/$arch
+
+		cd /tmp
+		schroot -c abf-$arch -- yaourt --export ${repo_out} --noconfirm -S ${packages}
+
+		find ${repo_out} -name '*.pkg.tar.*' -printf "%f %p\n" | \
+		while read pkg_file pkg_path; do
+			read pkg_name pkg_ver pkg_arch <<< $(package-query -f "%n %v %a" -p $pkg_path)
+
+			pkg_conf=$CONF_DIR/repo.d/$repo_name/$pkg_name
+			pkg_dest=${repo_dest}/$arch/$pkg_file
+			pkg_dest_any=${repo_dest}/any/$pkg_file
+			repo_db=${repo_dest}/$arch/${repo_name}.db.tar.gz
+
+			if [[ $pkg_arch == 'any' ]]; then
+				if [[ $(stat -c '%Y' $pkg_dest_any) == $(stat -c '%Y' $pkg_conf) ]]; then
+					echo "Skipping $pkg_name in ${repo_name} (any) repository... "
+					rm ${pkg_path}
+				else
+					echo "Moving $pkg_name to ${repo_name} (any) repository... "
+					mv $pkg_path $pkg_dest_any
+				fi
+				ln -sf ../any/$pkg_file $pkg_dest
+			else
+				echo "Moving $pkg_name to ${repo_name} ($arch) repository... "
+				mv -f $pkg_path $pkg_dest
+			fi
+			
+			if [ -f $pkg_dest ]; then
+				touch $pkg_conf
+				touch -hc -r $pkg_conf $repo_dest/*/$pkg_name-$pkg_ver-*.pkg.tar.xz
+				echo "Adding $pkg_name to ${repo_name} database... "
+				repo-add -f -d $repo_db $pkg_dest || echo "Failed"
+			fi
+		done
+
+		rm -rf ${repo_out}
+		rm -f $repo_db.old
+}
+
+get_stale_pkgs() {
+	find $CONF_DIR/repo.d/*/* -printf "%f %p\n" | \
+	while read pkg_name pkg_conf; do
+		repo_conf=$(dirname $pkg_conf)
+		repo_name=$(basename $repo_conf)
+		# Check ABS
+		read abs_ver abs_file <<< $(package-query -S -f "%V %f" $pkg_name)
+		[[ $abs_pkg_file ]] && {
+			for arch in "${ARCH_AVAIL[@]}"; do
+				[[ -f $REPO_DIR/$repo_name/$arch/$abs_pkg_file ]] || {
+					echo $pkg_name && continue
+				}
+			done
+		}
+
+		# Then AUR
+		read aur_ver aur_ts <<< $(package-query --aur --format "%v %L" $pkg_name)
+		[[ ! -z $aur_ts ]] && ts_gt $aur_ts $(stat -c '%Y' $pkg_conf) && {
+			echo $pkg_name && continue
+		}
+		for arch in "${ARCH_AVAIL[@]}"; do
+			pkg_file=$(ls -1 $REPO_DIR/$repo_name/$arch/$pkg_name-$aur_ver-*.pkg.tar.xz 2>/dev/null)
+			[[ ! -z $pkg_file && -f $(readlink -m $pkg_file) ]] || {
+				echo $pkg_name && break
+			}
+			ts_gt $(stat -c '%Y' $pkg_conf) $(stat -c '%Y' "$pkg_file") && {
+				echo $pkg_name && break
+			}
+		done
+	done
+}
+
+clean_repos() {
+	echo "Cleaning up repositories..."
+	ls -d1 $REPO_DIR/* 2>/dev/null | \
+	while read repo_path; do
+		repo_name=$(basename $repo_path)
+		[[ -d $CONF_DIR/repo.d/$repo_name ]] && continue
+		echo Deleting $repo_path... && rm -rf $repo_path
+	done
+	
+	echo "Cleaning up package directories..."
+	ls -d1 $REPO_DIR/*/*/* 2>/dev/null | \
+	while read pkg_path; do
+		repo_path_arch=$(dirname $pkg_path)
+		repo_arch=$(basename $repo_path_arch)
+		repo_path=$(dirname $repo_path_arch)
+		repo_name=$(basename $repo_path)
+		pkg_file=$(basename $pkg_path)
+		[[ $pkg_file =~ $repo_name.db* ]] && continue
+		if [[ $pkg_file =~ .*.pkg.tar.* ]]; then
+			pkg_name=$(package-query --format %n -p $pkg_path)
+			pkg_conf=$CONF_DIR/repo.d/$repo_name/$pkg_name
+			[[ -f $pkg_conf ]] && continue
+			[[ $repo_arch != 'any' ]] && repo-remove $repo_path_arch/$repo_name.db.tar.gz $pkg_name
+		fi
+		echo Deleting $pkg_path... && rm -f "$pkg_path"
+	done
+}
+
+pkgbuild_mod() {
+	echo "Processing modification request for \"$1\"..."
+}
+
+build_all() {
+	packages=$(get_stale_pkgs)
+	[[ "$packages" ]] && {
+		for arch in "${ARCH_AVAIL[@]}"; do
+			 build_pkgs aurbin $arch "$packages"
+		done
+	} || echo "No (re-)buildable package found."
+}
+
+ts_gt() {
+	ts_tar=$1; ts_ref=$2; lag_local=$[$ts_tar-$ts_ref]
+	[[ $lag_local -gt 0 ]] && return 0
+}
+
+ts_eq() {
+	ts_tar=$1; ts_ref=$2; lag_local=$[$ts_tar-$ts_ref]
+	[[ $lag_local -eq 0 ]] && return 0
+}
+
+#get_stale_pkgs
+#clean_repos
+#build_pkgs "abcd efgh iklk" aurbin i686
+build_all
