@@ -1,7 +1,14 @@
 #!/bin/bash
 
 ## Constants
-. /etc/abf/abf.conf
+source /etc/abf/abf.conf
+
+for sys_dir in $(package-query -Sf "%F" filesystem); do
+	[[ ${REPO_DIR} = "/${sys_dir%/}" || -z ${REPO_DIR} || ${REPO_DIR} = '/' ]] && {
+		echo "ERROR: \"${REPO_DIR}\" is not a valid value for REPO_DIR. Check /etc/abf/abf.conf"
+		exit 1
+	}
+done
 
 build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 	echo "Building packages ($packages) for ${repo_name} (${arch})..."
@@ -135,4 +142,4 @@ ts_eq() {
 #get_stale_pkgs
 #clean_repos
 #build_pkgs "abcd efgh iklk" aurbin i686
-build_all
+#build_all
