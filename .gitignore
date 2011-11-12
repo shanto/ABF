@@ -1,4 +1,0 @@
-*.btrfs
-.project
-var/abf/repo/*
-etc/abf/repo.d/*
