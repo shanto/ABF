@@ -1,0 +1,23 @@
+# /var/abf/repo
+
+This directory holds all packages built according to what you have configured inside /etc/abf/repo.d/
+
+After successfully running ABF with your repositories and packages configured, you are supposed have a directory structure here as follows:
+
+/var
+	/abf
+		/repo
+			/my-private-repo
+				/any
+					pkgname-ver-any.pkg.tar.xz
+					...
+				/i686
+					my-private-repo.db...
+					pkgname-ver-i686.pkg.tar.xz
+					...
+				/x86_64
+					my-private-repo.db...
+					pkgname-ver-x86_64.pkg.tar.xz
+					...
+
+The next step to consuming or serving these repos is to configure your HTTP/FTP server to serve these files.
