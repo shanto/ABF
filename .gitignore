@@ -1,0 +1,8 @@
+*.btrfs
+.project
+var/abf/repo/*
+etc/abf/repo.d/*
+pkg/*/pkg/*
+pkg/*/src/*
+pkg/*/*.src.tar.*
+pkg/*/*.pkg.tar.*
