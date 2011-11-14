@@ -5,7 +5,7 @@ pkgname=abf
 pkgver=20111114
 pkgrel=1
 pkgdesc="AUR/ABS build factory for Arch Linux"
-arch=('any')
+arch=('i686' 'x86_64')
 url="http:////github.com/Shanto/ABF"
 license=('GPL')
 groups=('system')
@@ -41,6 +41,9 @@ build() {
 	rm -rf "$srcdir/$_gitname-build"
 	git clone "$srcdir/$_gitname" "$srcdir/$_gitname-build"
 	cd "$srcdir/$_gitname-build"
+	
+	[[ $C_ARCH != 'x86_64' ]] && \
+		sed "s|ARCH_AVAIL=('x86_64' 'i686')|ARCH_AVAIL=('i686')|g" etc/abf/abf.conf
 }
 
 package() {
