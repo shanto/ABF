@@ -5,19 +5,19 @@ source /etc/abf/abf.conf
 
 for sys_dir in $(package-query -Sf "%F" filesystem); do
 	[[ ${REPO_DIR} = "/${sys_dir%/}" || -z ${REPO_DIR} || ${REPO_DIR} = '/' ]] && {
-		echo "ERROR: \"${REPO_DIR}\" is not a valid value for REPO_DIR. Check /etc/abf/abf.conf"
+		echo "ERROR: \"${REPO_DIR}\" is not a valid value for REPO_DIR.\nCheck /etc/abf/abf.conf"
 		exit 1
 	}
 done
 
 build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
-	echo "Building packages ($packages) for ${repo_name} (${arch})..."
+		echo "Building packages ($packages) for ${repo_name} (${arch})..."
 		tmp_abf=/tmp/abf && mkdir -p $tmp_abf
 		repo_out=$(mktemp --tmpdir=${tmp_abf} -d ${repo_name}-build-XXX)
 		repo_root=$VAR_DIR/repo
 		repo_dest=$repo_root/$repo_name
 
-		[[ -w $repo_root ]] || { echo "ERROR: $repo_root must be writable."; exit 1 }
+		[[ -w $repo_root ]] || { echo "ERROR: $repo_root must be writable."; exit 1; }
 		[[ -d ${repo_dest}/any ]] || mkdir -p ${repo_dest}/any
 		[[ -d ${repo_dest}/$arch ]] || mkdir -p ${repo_dest}/$arch
 
@@ -124,12 +124,12 @@ pkgbuild_mod() {
 }
 
 build_all() {
-	packages=$(get_stale_pkgs)
+	packages=$(get_stale_pkgs | sed "s|\s| |g")
 	[[ "$packages" ]] && {
 		for arch in "${ARCH_AVAIL[@]}"; do
 			 build_pkgs aurbin $arch "$packages"
 		done
-	} || echo "No (re-)buildable package found."
+	} || echo "No outdated or missing package found."
 }
 
 rebuild_chroots() {
@@ -160,6 +160,6 @@ ts_eq() {
 #get_stale_pkgs
 #clean_repos
 #build_pkgs "tiobench yaourt" aurbin i686
-build_all
+#build_all
 #rebuild_chroots
 #test_chroots
