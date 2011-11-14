@@ -60,6 +60,4 @@ BTRFS_IMG=${BTRFS_DIR}.btrfs
 	[[ -f "${BTRFS_IMG}" ]] && [[ -d "$BTRFS_DIR" ]] && (
 		sleep 2 && umount "$BTRFS_DIR"
 	)
-	# Cleanups
-	rm -rf /tmp/abf
 } || true
