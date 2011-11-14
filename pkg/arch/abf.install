@@ -19,5 +19,5 @@ post_remove()
 
 post_upgrade()
 {
-	post_install()
+	post_install $1
 }
