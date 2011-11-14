@@ -1,0 +1,23 @@
+post_install()
+{
+	groupadd -rf abf
+	echo "    ABF: Post Installation Steps"
+	echo "==> Add build user to the group \"abf\":"
+	echo "    # gpasswd -a <build-user> abf"
+	echo "==> Add this line in /etc/pam.d/schroot:"
+	echo "    # echo \"auth sufficient pam_wheel.so group=abf\" >> /etc/pam.d/schroot"
+	echo "    NOTE: Build user must logout->login for new group membership to take effect."
+}
+
+post_remove()
+{
+	echo "Purging all members of the group \"abf\""
+	groupmems -p abf
+	echo "Deleting the group \"abf\""
+	groupdel abf
+}
+
+post_upgrade()
+{
+	post_install()
+}

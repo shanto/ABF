@@ -1,9 +1,4 @@
-/etc/group
-/etc/hosts
-/etc/passwd
-/etc/sudoers
 /etc/resolv.conf
-/etc/rc.conf
+/etc/gshadow
 /etc/pacman.d/mirrorlist
-/etc/localtime
 

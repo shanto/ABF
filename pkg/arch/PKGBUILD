@@ -2,7 +2,7 @@
 # Author:		Shanto <shanto@hotmail.com>
 
 pkgname=abf
-pkgver=20111113
+pkgver=20111114
 pkgrel=1
 pkgdesc="AUR/ABS build factory for Arch Linux"
 arch=('any')

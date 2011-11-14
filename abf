@@ -18,8 +18,7 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 		[[ -d ${repo_dest}/any ]] || mkdir -p ${repo_dest}/any
 		[[ -d ${repo_dest}/$arch ]] || mkdir -p ${repo_dest}/$arch
 
-		cd /tmp
-		schroot -c abf-$arch -- yaourt --export ${repo_out} --noconfirm -S ${packages}
+		schroot -c abf-$arch -d /tmp -u root -- yaourt --export ${repo_out} --noconfirm -S ${packages}
 
 		find ${repo_out} -name '*.pkg.tar.*' -printf "%f %p\n" | \
 		while read pkg_file pkg_path; do
