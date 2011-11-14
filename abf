@@ -12,8 +12,9 @@ done
 
 build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 	echo "Building packages ($packages) for ${repo_name} (${arch})..."
+		tmp_abf=/tmp/abf && mkdir -p $tmp_abf
+		repo_out=$(mktemp --tmpdir=${tmp_abf} -d ${repo_name}-build-XXX)
 		repo_dest=$VAR_DIR/repo/$repo_name
-		repo_out=$(mktemp --tmpdir -d ${repo_name}-build-XXX)
 
 		[[ -d ${repo_dest}/any ]] || mkdir -p ${repo_dest}/any
 		[[ -d ${repo_dest}/$arch ]] || mkdir -p ${repo_dest}/$arch
@@ -51,7 +52,8 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 			fi
 		done
 
-		rm -rf ${repo_out}
+		rm -rf $repo_out
+		rm -rf $tmp_abf
 		rm -f $repo_db.old
 }
 
@@ -128,6 +130,21 @@ build_all() {
 	} || echo "No (re-)buildable package found."
 }
 
+rebuild_chroots() {
+	echo "Umounting chroots image..."
+	umount -f $VAR_DIR/chroots
+	rm -rf $VAR_DIR/chroots*
+	echo "Testing chroots..."
+	test_chroots
+}
+
+test_chroots() {
+	for arch in "${ARCH_AVAIL[@]}"; do
+		echo "Booting $arch chroot..."
+		schroot -c abf-$arch -d /tmp -- uname -a && yaourt --version || true
+	done
+}
+
 ts_gt() {
 	ts_tar=$1; ts_ref=$2; lag_local=$[$ts_tar-$ts_ref]
 	[[ $lag_local -gt 0 ]] && return 0
@@ -140,5 +157,7 @@ ts_eq() {
 
 #get_stale_pkgs
 #clean_repos
-#build_pkgs "abcd efgh iklk" aurbin i686
-#build_all
+#build_pkgs "tiobench yaourt" aurbin i686
+build_all
+#rebuild_chroots
+#test_chroots

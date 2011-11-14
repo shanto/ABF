@@ -6,7 +6,8 @@
 /proc					/proc					none	rw,bind		0		0
 /sys					/sys					none	rw,bind		0		0
 /dev/pts				/dev/pts				none	rw,bind		0		0
+/dev/fd					/dev/fd					none	rw,bind		0		0
 tmpfs					/dev/shm				tmpfs	defaults	0		0
-/tmp					/tmp					none	rw,bind		0		0
+/tmp/abf				/tmp/abf				none	rw,bind		0		0
 /var/cache/pacman/pkg	/var/cache/pacman/pkg	none	rw,bind		0		0
 

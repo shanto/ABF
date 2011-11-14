@@ -20,19 +20,24 @@
 BTRFS_IMG=${BTRFS_DIR}.btrfs
 
 [[ $STAGE = 'setup-start' ]] && {
+	source /etc/abf/abf.conf || exit 1
+	# FS setup
+	mkdir -p /tmp/abf
+	
+	# Initialize chroot image
 	declare -A BASE_PKGS
 	BASE_PKGS[abf32]="base base-devel sudo pacman yaourt xdelta3"
 	BASE_PKGS[abf64]="${BASE_PKGS[abf32]} multilib-devel"
 
 	[[ -d $BTRFS_DIR ]] || mkdir -p $BTRFS_DIR
 	[[ -f $BTRFS_IMG ]] || (
-		# ${BTRFS_IMG} was not found. Creating...
-		dd if=/dev/zero of=$BTRFS_IMG bs=1k count=2M
+		echo "${BTRFS_IMG} was not found. Creating new image..."
+		dd if=/dev/zero of=$BTRFS_IMG bs=1M count=$CHROOT_IMG_SIZE
 		mkfs.btrfs -L 'ABF_CHROOTS' $BTRFS_IMG
 	)
 	
 	[[ -f $BTRFS_IMG ]] && [[ -d $BTRFS_DIR ]] && (
-		# Mounting BTRFS Image...
+		# "Mounting BTRFS Image..."
 		mount -o loop,compress=lzo $BTRFS_IMG $BTRFS_DIR
 		[[ ! -d $CHROOT_BTRFS_SNAPSHOT_DIRECTORY && ! -z $CHROOT_BTRFS_SNAPSHOT_DIRECTORY ]] && (
 			mkdir -p $CHROOT_BTRFS_SNAPSHOT_DIRECTORY
@@ -40,6 +45,7 @@ BTRFS_IMG=${BTRFS_DIR}.btrfs
 		[[ -d ${BTRFS_DIR}/${BTRFS_SUB} ]] || (
 			btrfs subvolume create ${BTRFS_DIR}/${BTRFS_SUB}
 			chmod 0755 ${BTRFS_DIR}/${BTRFS_SUB}
+			echo "Making Arch Linux chroot filesystem..."
 			if [[ $CHROOT_NAME == 'abf32' ]]; then
 				setarch i386 /usr/sbin/mkarchroot -f -C /etc/abf/pacman-i686.conf ${BTRFS_DIR}/${BTRFS_SUB}/ ${BASE_PKGS[$CHROOT_NAME]}
 			else
@@ -55,4 +61,6 @@ BTRFS_IMG=${BTRFS_DIR}.btrfs
 	[[ -f "${BTRFS_IMG}" ]] && [[ -d "$BTRFS_DIR" ]] && (
 		sleep 2 && umount "$BTRFS_DIR"
 	)
+	# Cleanups
+	rm -rf /tmp/abf
 } || true
