@@ -51,7 +51,6 @@ BTRFS_IMG=${BTRFS_DIR}.btrfs
 			else
 				/usr/sbin/mkarchroot -f -C /etc/abf/pacman-x86_64.conf ${BTRFS_DIR}/${BTRFS_SUB}/ ${BASE_PKGS[$CHROOT_NAME]}
 			fi
-			mkarchroot -r /usr/sbin/locale-gen ${BTRFS_DIR}/${BTRFS_SUB}/
 		)
 	)
 } || true
