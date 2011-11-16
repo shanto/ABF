@@ -3,6 +3,9 @@
 . "$SETUP_DATA_DIR/common-data"
 . "$SETUP_DATA_DIR/common-functions"
 
+# this script is only for ABF chroots
+[[ $CHROOT_NAME =~ ^abf ]] || return 0
+
 [[ "$CHROOT_BTRFS_SOURCE_SUBVOLUME" ]] && {
 	BTRFS_DIR=$(dirname $CHROOT_BTRFS_SOURCE_SUBVOLUME)
 	BTRFS_SUB=$(basename $CHROOT_BTRFS_SOURCE_SUBVOLUME)
@@ -57,7 +60,8 @@ BTRFS_IMG=${BTRFS_DIR}.btrfs
 
 [[ $STAGE = 'setup-stop' ]] && {
 	# Unmounting BTRFS Image...
-	[[ -f "${BTRFS_IMG}" ]] && [[ -d "$BTRFS_DIR" ]] && (
-		sleep 2 && umount "$BTRFS_DIR"
-	)
+	mount | grep -qe "$BTRFS_DIR" && {
+		sleep 3
+		umount "$BTRFS_DIR"
+	}
 } || true
