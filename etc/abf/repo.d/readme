@@ -2,35 +2,36 @@
 
 For each repository to configure, make a directory with same name here.
 
-Example:
-	/etc
-		/abf
-			/repo.d
-				/my-public-repo
-				/my-private-repo
+	/etc/
+		/abf/
+			/repo.d/
+					/my-public-repo/
+					/my-private-repo/
 	
 	# mkdir -p /var/abf/repo.d/{my-public-repo,my-private-repo}
 
-Similarly, inside each repository directory, create a 0-byte file for each package to be built.
+Similarly, inside the repository directories, create a 0-byte file for each package to be built.
 
-Example:
 	/etc
 		/abf
 			/repo.d
-				/my-public-repo
-					yaourt
-					dropbox
-					aurvote
-					package-query
-				/my-private-repo
-					ttf-adobe-fonts
-					ttf-vista-fonts
+				/my-public-repo/
+								/yaourt
+								/dropbox
+								/aurvote
+								/package-query
+				/my-private-repo/
+								/ttf-adobe-fonts
+								/ttf-vista-fonts
 	
+	Examples:
+
 	# touch /var/abf/repo.d/my-public-repo/{yaourt,dropbox,aurvote,package-query}
+
 	# touch /var/abf/repo.d/my-private-repo/{ttf-adobe-fonts,ttf-vista-fonts}
 
-At this stage, these files will be used to
-	1. Configure your packages under one or more repository names.
-	2. Record timestamps of ABF builds.
+	# for pkg in $(package-query -Qm -f %n); do
+	#	touch /etc/abf/repo.d/my-repo/$pkg
+	# done
 
-Later, these files might also be used to provide functionalities like that in `customizepkg`.
+In future, these files might also be used to provide functionalities like that in `customizepkg`. In that case, these files will contain the customization instructions for the corresponding package.

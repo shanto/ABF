@@ -38,7 +38,7 @@ BTRFS_IMG=${BTRFS_DIR}.btrfs
 	
 	[[ -f $BTRFS_IMG ]] && [[ -d $BTRFS_DIR ]] && (
 		# "Mounting BTRFS Image..."
-		mount -o loop,compress=lzo $BTRFS_IMG $BTRFS_DIR
+		mount -o loop,compress=lzo $BTRFS_IMG $BTRFS_DIR || exit
 		[[ ! -d $CHROOT_BTRFS_SNAPSHOT_DIRECTORY && ! -z $CHROOT_BTRFS_SNAPSHOT_DIRECTORY ]] && (
 			mkdir -p $CHROOT_BTRFS_SNAPSHOT_DIRECTORY
 		)

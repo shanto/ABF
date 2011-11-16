@@ -13,11 +13,11 @@ done
 build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 		echo "Building packages ($packages) for ${repo_name} (${arch})..."
 		tmp_abf=/tmp/abf && mkdir -p $tmp_abf
-		repo_out=$(mktemp --tmpdir=${tmp_abf} -d ${repo_name}-build-XXX)
+		repo_out=$(mktemp --tmpdir=${tmp_abf} -d abf.build.${repo_name}.$arch.XXX)
 		repo_root=$VAR_DIR/repo
 		repo_dest=$repo_root/$repo_name
 
-		[[ -w $repo_root ]] || { echo "ERROR: $repo_root must be writable."; exit 1; }
+		[[ -w $repo_root ]] || { echo "ERROR: $repo_root must be writable."; exit; }
 		[[ -d ${repo_dest}/any ]] || mkdir -p ${repo_dest}/any
 		[[ -d ${repo_dest}/$arch ]] || mkdir -p ${repo_dest}/$arch
 
@@ -27,7 +27,7 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 		while read pkg_file pkg_path; do
 			read pkg_name pkg_ver pkg_arch <<< $(package-query -f "%n %v %a" -p $pkg_path)
 
-			pkg_conf=$CONF_DIR/repo.d/$repo_name/$pkg_name
+			pkg_conf=$REPO_CONF/$repo_name/$pkg_name
 			pkg_dest=${repo_dest}/$arch/$pkg_file
 			pkg_dest_any=${repo_dest}/any/$pkg_file
 			repo_db=${repo_dest}/$arch/${repo_name}.db.tar.gz
@@ -50,18 +50,19 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 				touch $pkg_conf
 				touch -hc -r $pkg_conf $repo_dest/*/$pkg_name-$pkg_ver-*.pkg.tar.xz
 				echo "Adding $pkg_name to ${repo_name} database... "
-				repo-add -f -d $repo_db $pkg_dest || echo "Failed"
+				repo-add -f -d $repo_db $pkg_dest || \
+					echo "Failed to add $pkg_name to $repo_name"
 			fi
 		done
 
 		rm -rf $repo_out
 		rm -rf $tmp_abf
-		rm -f $repo_db.old
 }
 
 get_stale_pkgs() {
-	find $CONF_DIR/repo.d/*/* -printf "%f %p\n" | \
+	cd $REPO_CONF
 	while read pkg_name pkg_conf; do
+		[[ -z $pkg_name ]] && continue
 		repo_conf=$(dirname $pkg_conf)
 		repo_name=$(basename $repo_conf)
 		# Check ABS
@@ -88,35 +89,78 @@ get_stale_pkgs() {
 				echo $pkg_name && break
 			}
 		done
-	done
+	done <<< "$(find $REPO_CONF -maxdepth 2 -mindepth 2 -printf "%f %P\n")"
 }
 
 clean_repos() {
-	echo "Cleaning up repositories..."
-	ls -d1 $REPO_DIR/* 2>/dev/null | \
-	while read repo_path; do
-		repo_name=$(basename $repo_path)
-		[[ -d $CONF_DIR/repo.d/$repo_name ]] && continue
-		echo Deleting $repo_path... && rm -rf $repo_path
-	done
+	declare -A repo_files
+	cd $REPO_DIR
 	
-	echo "Cleaning up package directories..."
-	ls -d1 $REPO_DIR/*/*/* 2>/dev/null | \
+	echo "Cleaning up repo directory structure..."
+
+	while read repo_name; do
+		[[ -d $REPO_CONF/$repo_name ]] || \
+			rm -rf --one-file-system $repo_name
+	done <<< "$(find $REPO_DIR -type d -mindepth 1 -maxdepth 1 -printf "%P\n")"
+	
+	while read arch_path; do
+		[[ -v $arch_path ]] || continue
+		arch_name=$(basename $arch_path)
+		[[ $arch_name == 'any' ]] || \
+		[[ $arch_name == 'i686' ]] || \
+		[[ $arch_name == 'x86_64' ]] || \
+			rm -rf --one-file-system $arch_path
+	done <<< "$(find $REPO_DIR -mindepth 2 -maxdepth 2 -printf "%P\n")"
+	
+	while read db_path; do
+		[[ -f $db_path ]] || continue
+		db_arch=$(echo $(dirname $db_path) | tr '/' '-')
+		repo_files[$db_arch]="$(repo_files $db_path)"
+	done <<< "$(find $REPO_DIR -mindepth 3 -maxdepth 3 -name '*.db' -printf "%P\n")"
+	
+	echo "Cleaning up package and delta files..."
 	while read pkg_path; do
-		repo_path_arch=$(dirname $pkg_path)
-		repo_arch=$(basename $repo_path_arch)
-		repo_path=$(dirname $repo_path_arch)
-		repo_name=$(basename $repo_path)
+		[[ -f $pkg_path || -L $pkg_path ]] || continue
 		pkg_file=$(basename $pkg_path)
-		[[ $pkg_file =~ $repo_name.db* ]] && continue
-		if [[ $pkg_file =~ .*.pkg.tar.* ]]; then
-			pkg_name=$(package-query --format %n -p $pkg_path)
-			pkg_conf=$CONF_DIR/repo.d/$repo_name/$pkg_name
-			[[ -f $pkg_conf ]] && continue
-			[[ $repo_arch != 'any' ]] && repo-remove $repo_path_arch/$repo_name.db.tar.gz $pkg_name
-		fi
-		echo Deleting $pkg_path... && rm -f "$pkg_path"
-	done
+		pkg_arch=$(basename $(dirname $pkg_path))
+		repo_name=$(dirname $(dirname $pkg_path))
+		repo_db=$REPO_DIR/$repo_name/$pkg_arch/$repo_name.db.tar.gz
+		pkg_name=$([[ $pkg_file =~ '.pkg.tar.xz' ]] && [[ -f $pkg_path ]] && package-query -Q -f "%n" -p $pkg_path)
+		pkg_conf=$REPO_CONF/$repo_name/$pkg_name
+
+		# remove packages with missing config
+		[[ ! -z $pkg_name ]] && [[ ! -f $pkg_conf ]] && {
+			echo "Removing orphan package $pkg_file"
+			find $REPO_DIR/$repo_name/ -name '*.db.tar.gz' -exec \
+				repo-remove {} $pkg_name \;
+			rm -f $pkg_path
+			continue
+		}
+		
+		# remove broken links
+		[[ -f $(readlink -m $pkg_path) ]] || {
+			echo "Deleting broken link $pkg_path"
+			rm -f $pkg_path
+			continue
+		}
+		
+		# keep db files, and files referenced in db files
+		[[ $(basename "$pkg_file") =~ $repo_name\.db(\.tar\.gz){0,1} ]] && continue
+		echo "${repo_files[$repo_name-$pkg_arch]}" | grep -qe "^$pkg_file$" && continue
+		echo "${repo_deltas[$repo_name-$pkg_arch]}" | grep -qe "^$pkg_file$" && continue
+
+		# keep link targets (any) referenced from other repo dirs
+		[[ $pkg_arch == 'any' ]] && [[ ! -z $(find $REPO_DIR -type l -name $pkg_file) ]] && \
+			continue
+		
+		# delete everything else
+		echo Deleting $pkg_path...
+		rm -rf "$pkg_path"
+	done <<< "$(find $REPO_DIR -mindepth 3 -maxdepth 3 -printf "%P\n")"
+	
+	find $REPO_DIR -name '*.db*.old' -delete
+	
+	echo "Cleanup complete."
 }
 
 pkgbuild_mod() {
@@ -124,12 +168,12 @@ pkgbuild_mod() {
 }
 
 build_all() {
-	packages=$(get_stale_pkgs | sed "s|\s| |g")
+	packages=$(get_stale_pkgs | tr '\n' ' ')
 	[[ "$packages" ]] && {
 		for arch in "${ARCH_AVAIL[@]}"; do
 			 build_pkgs aurbin $arch "$packages"
 		done
-	} || echo "No outdated or missing package found."
+	} || echo "No package found for building."
 }
 
 rebuild_chroots() {
@@ -147,6 +191,28 @@ test_chroots() {
 	done
 }
 
+repo_files() {
+	db_file=$1
+	db_name=$(basename $(basename $1 .db) .db.tar.gz)
+	[[ -f $db_file ]] || db_file=$(readlink -m $REPO_DIR/$db_name/$1)
+	[[ -f $db_file ]] || db_file=$(readlink -m $REPO_DIR/$db_name/$1.db)
+	[[ -f $db_file ]] || { echo ERROR: $db_file not found; exit 1; }
+	
+	db_dir=$(mktemp --tmpdir -d abf.$db_name.XXX)
+	tar -xf $db_file -C $db_dir
+	cd $db_dir
+
+	while read pkg_file; do
+		echo $pkg_file
+	done <<< "$(find $db_dir -type f -name 'desc' -exec awk '/%FILENAME%/{getline; print}' {} \;)"
+
+	while read delta_file checksum size delta_from delta_to; do
+		echo $delta_file
+	done <<< "$(find $db_dir -type f -name 'deltas' -exec grep -v '%DELTAS%' {} \;)"
+	
+	rm -rf $db_dir
+}
+
 ts_gt() {
 	ts_tar=$1; ts_ref=$2; lag_local=$[$ts_tar-$ts_ref]
 	[[ $lag_local -gt 0 ]] && return 0
@@ -158,8 +224,10 @@ ts_eq() {
 }
 
 #get_stale_pkgs
-#clean_repos
 #build_pkgs "tiobench yaourt" aurbin i686
-#build_all
+build_all
+clean_repos
 #rebuild_chroots
 #test_chroots
+#repo_files x86_64/aurbin
+#repo_files i686/aurbin
