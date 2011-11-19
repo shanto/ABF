@@ -30,7 +30,7 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 	
 	# Initialize chroot image
 	declare -A BASE_PKGS
-	BASE_PKGS[abf32]="base base-devel sudo pacman yaourt xdelta3"
+	BASE_PKGS[abf32]="base base-devel sudo pacman yaourt xdelta3 unzip subversion git bzr"
 	BASE_PKGS[abf64]="${BASE_PKGS[abf32]} multilib-devel"
 
 	[[ -d $BTRFS_DIR ]] || mkdir -p $BTRFS_DIR

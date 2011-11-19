@@ -27,13 +27,15 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 	repo_out=$(mktemp --tmpdir=${tmp_abf} -d ${repo_name}.$arch.XXX)
 	repo_root=$VAR_DIR/repo
 	repo_dest=$repo_root/$repo_name
+	repo_conf=$REPO_CONF/$repo_name
 
 	[[ -w $repo_root ]] || { echo "ERROR: $repo_root must be writable."; exit; }
 	[[ -w $tmp_abf ]] || { echo "ERROR: $tmp_abf must be writable."; exit; }
+	[[ -d ${repo_conf} ]] || mkdir -p ${repo_conf}
 	[[ -d ${repo_dest}/any ]] || mkdir -p ${repo_dest}/any
 	[[ -d ${repo_dest}/$arch ]] || mkdir -p ${repo_dest}/$arch
 
-	schroot -c abf-$arch -d /tmp -u root -- yaourt --export ${repo_out} --noconfirm -S ${packages}
+	schroot -c abf-$arch -d /tmp -u root -- yaourt --export ${repo_out} --noconfirm -Sy ${packages}
 
 	find ${repo_out} -name '*.pkg.tar.*' -printf "%f %p\n" | \
 	while read pkg_file pkg_path; do
@@ -74,48 +76,67 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 get_stale_pkgs() {
 	abs_dir=$(mktemp --tmpdir=/tmp -d abs.XXX)
 	cd $REPO_CONF
-	while read pkg_name pkg_conf; do
-		[[ -n $pkg_name ]] || continue
+
+	pkg_names_confs="$(find $REPO_CONF -maxdepth 2 -mindepth 2 -printf "%f %P\n")"
+	pkg_names=$(echo "$pkg_names_confs" | cut -d\  -f1)
+	
+	declare -A abs_result
+	declare -A abs_repo_pkgs
+	declare -A aur_result
+	
+	while read pkg_name pkg_ver pkg_file pkg_repo; do
+		abs_result[$pkg_name]="$pkg_name $pkg_ver $pkg_file $pkg_repo"
+		abs_repo_pkgs[$pkg_name]="$pkg_repo/$pkg_name"
+	done <<< "$(package-query -S -f "%n %V %f %r" $pkg_names)"
+	
+	while read pkg_name pkg_ver pkg_ts; do
+		aur_result[$pkg_name]="$pkg_name $pkg_ver $pkg_ts"
+	done <<< "$(package-query --aur --format "%n %v %L" $pkg_names)"
+	
+	ABSROOT=$abs_dir abs "${abs_repo_pkgs[@]}" &>/dev/null
+	
+	while read pkg_name pkg_conf; do [[ -n $pkg_name ]] || continue
 		repo_conf=$(dirname $pkg_conf)
 		repo_name=$(basename $repo_conf)
 
 		# Check ABS
-		read abs_ver abs_pkg abs_repo <<< $(package-query -S -f "%V %f %r" $pkg_name)
-		abs_dir=$ABS_DIR/$abs_repo/$pkg_name
-		[[ $abs_pkg_file ]] && {
-			# missing package file for any arch?
+		read abs_name abs_ver abs_pkg abs_repo <<< ${abs_result[$pkg_name]}
+		[[ -n ${abs_result[$pkg_name]} && -d $abs_dir/$abs_repo/$pkg_name ]] && {
+			# missing package file?
 			for arch in "${ARCH_AVAIL[@]}"; do
 				[[ -f $REPO_DIR/$repo_name/$arch/$abs_pkg ]] || {
-					echo $pkg_name && continue
+					echo $pkg_name && continue 2
 				}
 			done
 			# timestamp comparison against ABS
-			$ABSROOT=$abs_dir abs $abs_repo/$pkg_name
 			[[ -n $(find $abs_dir -cnewer $pkg_conf) ]] && {
 				echo $pkg_name && continue
 			}
 		}
 
 		# Then AUR
-		read aur_ver aur_ts <<< $(package-query --aur --format "%v %L" $pkg_name)
-		# timestamp comparison against AUR
-		[[ -n $aur_ts ]] && ts_gt $aur_ts $(stat -c '%Y' $pkg_conf) && {
-			echo $pkg_name && continue
-		}
+		[[ -n ${aur_result[$pkg_name]} ]] && {
+			read aur_name aur_ver aur_ts <<< ${aur_result[$pkg_name]}
+			# timestamp comparison against AUR
+			[[ -n $aur_ts ]] && ts_gt $aur_ts $(stat -c '%Y' $pkg_conf) && {
+				echo $pkg_name && continue
+			}
 		
-		# .pkg.tar.* file check
-		pkg_ver=${abs_ver:=$aur_ver}
-		for arch in "${ARCH_AVAIL[@]}"; do
-			pkg_file=$(ls -1 $REPO_DIR/$repo_name/$arch/$pkg_name-$pkg_ver-*.pkg.tar.* 2>/dev/null)
-			[[ ! -z $pkg_file && -f $(readlink -m $pkg_file) ]] || {
-				echo $pkg_name && break
-			}
-			# timestamp comparison against pkg
-			ts_gt $(stat -c '%Y' $pkg_conf) $(stat -c '%Y' "$pkg_file") && {
-				echo $pkg_name && break
-			}
-		done
-	done <<< "$(find $REPO_CONF -maxdepth 2 -mindepth 2 -printf "%f %P\n")"
+			# .pkg.tar.* file check
+			pkg_ver=${abs_ver:=$aur_ver}
+			for arch in "${ARCH_AVAIL[@]}"; do
+				pkg_file=$(ls -1 $REPO_DIR/$repo_name/$arch/$pkg_name-$pkg_ver-*.pkg.tar.* 2>/dev/null)
+				[[ ! -z $pkg_file && -f $(readlink -m $pkg_file) ]] || {
+					echo $pkg_name && break
+				}
+				# timestamp comparison against pkg
+				ts_gt $(stat -c '%Y' $pkg_conf) $(stat -c '%Y' "$pkg_file") && {
+					echo $pkg_name && break
+				}
+			done
+		}
+	done <<< "$pkg_names_confs"
+
 	return 0
 }
 
@@ -197,16 +218,18 @@ clean_repos() {
 }
 
 pkgbuild_mod() {
-	echo "Processing modification request for \"$1\"..."
+	echo "Processing modification request for \"$1\"... Not Implemented!"
 }
 
 build_all() {
 	packages=$(get_stale_pkgs | tr '\n' ' ')
-	[[ "$packages" ]] && {
-		for arch in "${ARCH_AVAIL[@]}"; do
-			 build_pkgs aurbin $arch "$packages"
-		done
-	} || echo "No package found for building."
+	[[ -n "$packages" ]] || {
+		echo "No package found for building."
+		exit 0
+	}
+	for arch in "${ARCH_AVAIL[@]}"; do
+		 build_pkgs aurbin $arch "$packages"
+	done
 }
 
 rebuild_chroots() {
@@ -220,8 +243,25 @@ rebuild_chroots() {
 test_chroots() {
 	for arch in "${ARCH_AVAIL[@]}"; do
 		echo "Booting $arch chroot..."
-		schroot -c abf-$arch -d /tmp -- uname -a && yaourt --version || true
+		schroot -c abf-$arch -d /tmp -- uname -a
 	done
+}
+
+sample_config() {
+	echo "Generating sample config files under $REPO_CONF..."
+	echo "==> Creating directories for repos..."
+	mkdir -p $REPO_CONF/{my-public-repo,my-private-repo,aurbin}
+	echo $(ls -1 -I readme $REPO_CONF)
+	echo "==> Adding some public packages with free license..."
+	touch $REPO_CONF/my-public-repo/{yaourt,pacman-color,aurvote,freetype2-infinality}
+	echo $(ls -1 $REPO_CONF/my-public-repo)
+	echo "==> Adding some private packages with unknown license..."
+	touch $REPO_CONF/my-private-repo/{ttf-vista-fonts,ttf-ms-fonts,ttf-adobe-fonts,ttf-mac-fonts}
+	echo $(ls -1 $REPO_CONF/my-private-repo)
+	echo "==> Adding locally installed unsupported packages..."
+	for pkg in $(package-query -Qm -f %n); do touch $REPO_CONF/aurbin/$pkg; done
+	echo $(ls -1 $REPO_CONF/aurbin)
+	echo "Done."
 }
 
 repo_query() { db_file=$1; format=$2
@@ -263,6 +303,15 @@ ts_eq() {
 	[[ $lag_local -eq 0 ]] && return 0
 }
 
+safety_checks() {
+	for sys_dir in $(package-query -Sf "%F" filesystem); do
+		[[ ${REPO_DIR} = "/${sys_dir%/}" || -z ${REPO_DIR} || ${REPO_DIR} = '/' ]] && {
+			echo "ERROR: \"${REPO_DIR}\" is not a valid value for REPO_DIR.\nCheck /etc/abf/abf.conf"
+			exit 1
+		}
+	done
+}
+
 print_help() { option=$1
 	[[ -n $option ]] && cat <<-EOF
 		Invalid Option: $option
@@ -270,14 +319,14 @@ print_help() { option=$1
 	EOF
 	cat <<-EOF
 		Command Syntax: $NAME [options]
-		
+
 		  -a|--build-all
 		       Check and build all missing and outdated packages.
 
-		  -sc|--sample-config
-		        Generate sample config files under $REPO_CONF.
+		  -b|--build <repo-name> <packages>
+		       Build specified packages and add to config directory if missing.
 
-		  --print-rebuildable
+		  -s|--print-rebuildable
 		         Scan AUR+ABS and print stale packages which need building.
 
 		  --clean-repos
@@ -286,18 +335,21 @@ print_help() { option=$1
 		  -h|--help
 		         Print this help
 
-		  Repo/package Config Management:
+		  Config Management:
 
-		  -qr|--repo-query repo-db-file [format]
+		  -sc|--sample-config
+		        Generate sample config files under $REPO_CONF.
+
+		  -qr|--repo-query <repo-db-file> [format]
 		         Query and print the given repo db contents in given format.
 
-		  -ap|--add-package repo-name packages
+		  -pa|--add-package <repo-name> packages
 		        Add given packages under corresponding repo conf directory.
 
-		  -rp|--remove-package repo-name packages
+		  -pr|--remove-package <repo-name> packages
 		        Remove given packages from corresponding repo conf directory.
 
-		  -rr|--remove-repo repo-name
+		  -rr|--remove-repo <repo-name>
 		        Remove given repo conf directory including all packages.
 
 		  CHROOT Operations:
@@ -314,26 +366,59 @@ print_help() { option=$1
 	[[ -n $option ]] && exit 1
 }
 
-## Constants
-source /etc/abf/abf.conf
+. /etc/abf/abf.conf || exit 1
 
-for sys_dir in $(package-query -Sf "%F" filesystem); do
-	[[ ${REPO_DIR} = "/${sys_dir%/}" || -z ${REPO_DIR} || ${REPO_DIR} = '/' ]] && {
-		echo "ERROR: \"${REPO_DIR}\" is not a valid value for REPO_DIR.\nCheck /etc/abf/abf.conf"
-		exit 1
-	}
-done
+safety_checks
 
 while [[ $1 ]]; do
 	case "$1" in
-		-sc|--sample-config) echo sc;;
-		-h|--help)          print_help; exit 0;;
-		*)                  print_help "$1";; 
+		-a|--build-all)
+			build_all
+			;;
+		-b|--build)
+			build_pkgs $1 $2
+			;;
+		-s|--print-rebuildable)
+			get_stale_pkgs
+			;;
+		--clean-repos)
+			clean_repos
+			;;
+		-h|--help)
+			print_help; exit 0
+			;;
+		-sc|--sample-config)
+			sample_config
+			;;
+		-qr|--repo-query)
+			repo_query $1 $2
+			;;
+		-pa|--add-package)
+			repo_add_pkg $1 $2
+			;;
+		-pr|--remove-package)
+			repo_rm_pkg $1 $2
+			;;
+		-rr|--remove-repo)
+			repo_rm $1
+			;;
+		--update-chroots)
+			update_chroots
+			;;
+		--rebuild-chroots)
+			rebuild_chroots
+			;;
+		--test-chroots)
+			test_chroots $1
+			;;
+		*)
+			print_help "$1"
+			;; 
 	esac
 	shift
 done
 
-get_stale_pkgs
+#get_stale_pkgs
 #build_pkgs "tiobench yaourt" aurbin i686
 #build_all
 #clean_repos

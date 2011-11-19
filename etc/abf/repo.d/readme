@@ -8,7 +8,7 @@ For each repository to configure, make a directory with same name here.
 					/my-public-repo/
 					/my-private-repo/
 	
-	# mkdir -p /var/abf/repo.d/{my-public-repo,my-private-repo}
+	# mkdir -p /etc/abf/repo.d/{my-public-repo,my-private-repo,aurbin}
 
 Similarly, inside the repository directories, create a 0-byte file for each package to be built.
 
@@ -19,19 +19,23 @@ Similarly, inside the repository directories, create a 0-byte file for each pack
 								/yaourt
 								/dropbox
 								/aurvote
+								/tiobench
 								/package-query
 				/my-private-repo/
-								/ttf-adobe-fonts
-								/ttf-vista-fonts
+								/gam
+								/spotify
 	
 	Examples:
 
-	# touch /var/abf/repo.d/my-public-repo/{yaourt,dropbox,aurvote,package-query}
+	Some public packages with free license
+	# touch /etc/abf/repo.d/my-public-repo/{yaourt,aurvote}
 
-	# touch /var/abf/repo.d/my-private-repo/{ttf-adobe-fonts,ttf-vista-fonts}
+	Some private packages with unknown license
+	# touch /etc/abf/repo.d/my-private-repo/{ttf-adobe-fonts,ttf-vista-fonts}
 
+	All locally installed unsupported packages
 	# for pkg in $(package-query -Qm -f %n); do
-	#	touch /etc/abf/repo.d/my-repo/$pkg
+	#	touch /etc/abf/repo.d/aurbin/$pkg
 	# done
 
 In future, these files might also be used to provide functionalities like that in `customizepkg`. In that case, these files will contain the customization instructions for the corresponding package.
