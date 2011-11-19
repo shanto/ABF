@@ -112,6 +112,10 @@ get_stale_pkgs() {
 			[[ -n $(find $abs_dir -cnewer $pkg_conf) ]] && {
 				echo $pkg_name && continue
 			}
+			# timestamp comparison against pkg
+			ts_gt $(stat -c '%Y' $pkg_conf) $(stat -c '%Y' "$abs_pkg") && {
+				echo $pkg_name && continue
+			}
 		}
 
 		# Then AUR
@@ -126,12 +130,12 @@ get_stale_pkgs() {
 			pkg_ver=${abs_ver:=$aur_ver}
 			for arch in "${ARCH_AVAIL[@]}"; do
 				pkg_file=$(ls -1 $REPO_DIR/$repo_name/$arch/$pkg_name-$pkg_ver-*.pkg.tar.* 2>/dev/null)
-				[[ ! -z $pkg_file && -f $(readlink -m $pkg_file) ]] || {
-					echo $pkg_name && break
+				[[ -n $pkg_file && -f $(readlink -m $pkg_file) ]] || {
+					echo $pkg_name && continue 2
 				}
 				# timestamp comparison against pkg
 				ts_gt $(stat -c '%Y' $pkg_conf) $(stat -c '%Y' "$pkg_file") && {
-					echo $pkg_name && break
+					echo $pkg_name && continue 2
 				}
 			done
 		}
@@ -253,10 +257,10 @@ sample_config() {
 	mkdir -p $REPO_CONF/{my-public-repo,my-private-repo,aurbin}
 	echo $(ls -1 -I readme $REPO_CONF)
 	echo "==> Adding some public packages with free license..."
-	touch $REPO_CONF/my-public-repo/{yaourt,pacman-color,aurvote,freetype2-infinality}
+	touch $REPO_CONF/my-public-repo/{pacman-color,aurvote,freetype2-infinality}
 	echo $(ls -1 $REPO_CONF/my-public-repo)
 	echo "==> Adding some private packages with unknown license..."
-	touch $REPO_CONF/my-private-repo/{ttf-vista-fonts,ttf-ms-fonts,ttf-adobe-fonts,ttf-mac-fonts}
+	touch $REPO_CONF/my-private-repo/{ttf-{ms,vista,mac,adobe}-fonts}
 	echo $(ls -1 $REPO_CONF/my-private-repo)
 	echo "==> Adding locally installed unsupported packages..."
 	for pkg in $(package-query -Qm -f %n); do touch $REPO_CONF/aurbin/$pkg; done

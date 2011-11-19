@@ -16,11 +16,9 @@ Similarly, inside the repository directories, create a 0-byte file for each pack
 		/abf
 			/repo.d
 				/my-public-repo/
-								/yaourt
 								/dropbox
 								/aurvote
 								/tiobench
-								/package-query
 				/my-private-repo/
 								/gam
 								/spotify
