@@ -25,7 +25,7 @@ BTRFS_IMG=${BTRFS_DIR}.btrfs
 [[ $STAGE = 'setup-start' ]] && {
 	source /etc/abf/abf.conf || exit 1
 	# FS setup
-	mkdir -p /tmp/abf
+	mkdir -p /tmp/abf && chmod 0777 /tmp/abf
 	
 	# Initialize chroot image
 	declare -A BASE_PKGS
