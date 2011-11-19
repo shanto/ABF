@@ -6,6 +6,8 @@
 # this script is only for ABF chroots
 [[ $CHROOT_NAME =~ ^abf ]] || return 0
 
+. /etc/abf/abf.conf || exit 1
+
 [[ "$CHROOT_BTRFS_SOURCE_SUBVOLUME" ]] && {
 	BTRFS_DIR=$(dirname $CHROOT_BTRFS_SOURCE_SUBVOLUME)
 	BTRFS_SUB=$(basename $CHROOT_BTRFS_SOURCE_SUBVOLUME)
@@ -20,10 +22,9 @@
 	exit 1
 )
 
-BTRFS_IMG=${BTRFS_DIR}.btrfs
+BTRFS_IMG=$VAR_DIR/chroots.btrfs
 
 [[ $STAGE = 'setup-start' ]] && {
-	source /etc/abf/abf.conf || exit 1
 	# FS setup
 	mkdir -p /tmp/abf && chmod 0777 /tmp/abf
 	
@@ -61,7 +62,7 @@ BTRFS_IMG=${BTRFS_DIR}.btrfs
 [[ $STAGE = 'setup-stop' ]] && {
 	# Unmounting BTRFS Image...
 	mount | grep -qe "$BTRFS_DIR" && {
-		sleep 3
+		#sleep 2
 		umount "$BTRFS_DIR"
 	}
 } || true

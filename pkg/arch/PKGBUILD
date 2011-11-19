@@ -49,7 +49,7 @@ build() {
 
 package() {
 	cd "$srcdir/$_gitname-build"
-	cp -r {etc,var} "$pkgdir/"
+	cp -r {etc,var,lib} "$pkgdir/"
 	install -d "$pkgdir/usr/bin/"
 	install -m0755 abf "$pkgdir/usr/bin/"
 }
