@@ -3,5 +3,5 @@
 arch/*/*
 arch/*.tar.*
 etc/abf/repo.d/*
-var/abf/repo/*
+var/abf/*/*
 var/cache/*/*/*/*

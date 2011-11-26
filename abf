@@ -24,7 +24,7 @@ VERSION='0.1'
 build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 	echo "Building packages ($packages) for ${repo_name} (${arch})..."
 	tmp_abf=/tmp/abf && mkdir -p $tmp_abf
-	repo_out=$(mktemp --tmpdir=${tmp_abf} -d ${repo_name}.$arch.XXX)
+	repo_out=$(mktemp --tmpdir=${tmp_abf} -d ${repo_name}.$arch.XXX 2>/dev/null)
 	repo_root=$VAR_DIR/repo
 	repo_dest=$repo_root/$repo_name
 	repo_conf=$REPO_CONF/$repo_name
@@ -38,18 +38,18 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 	#trap "rm -rf $repo_out; rm -rf $tmp_abf" TERM HUP QUIT INT ERR
 
 	# put customizepkg scripts in place
-	install -d $tmp_abf/customizepkg.d && \
-	install $repo_conf/* $tmp_abf/customizepkg.d
+	rm -rf $ABF_CPKG/*
+	install $repo_conf/* $ABF_CPKG
 
 	schroot_session=$(schroot -b -c abf-$arch)
 	#trap "[[ -n \$(schroot -l -c $schroot_session 2>/dev/null) ]] && \
 	#	 schroot -e -c $schroot_session" TERM HUP QUIT INT ERR
 
 	# build packages and deps
-	schroot -r -c $schroot_session -d /tmp -u root --\
+	schroot -r -c $schroot_session -d $tmp_abf --\
 		yaourt --export ${repo_out} --noconfirm -Sy ${packages}
-	# then build ABS packages
-	schroot -r -c $schroot_session -d /tmp -u root --\
+	# then build ABS packages (again, because -b for deps is too much)
+	schroot -r -c $schroot_session -d $tmp_abf --\
 		bash -c "abs_pkgs=\$(package-query -S -f "%n" ${packages}); \
 		[[ -n \$abs_pkgs ]] && \
 			yaourt --export ${repo_out} --noconfirm -Sb \$abs_pkgs"
@@ -90,7 +90,7 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 		fi
 	done
 
-	rm -rf $repo_out; rm -rf $tmp_abf
+	rm -rf $repo_out; rm -rf $tmp_abf; $ABF_CPKG/*
 }
 
 get_stale_pkgs() {
@@ -350,6 +350,17 @@ safety_checks() {
 	done
 }
 
+permission_checks() {
+	[[ $(id -un) == 'abf' ]] || {
+		cat <<- EOF
+		This program must be run as the 'abf' user.
+		Use "sudo -u abf -- $0" if running from terminal.
+		For cron jobs, set it to run under the 'abf' user.
+		EOF
+		exit 1
+	}
+}
+
 print_help() { option=$1
 	[[ -n $option ]] && cat <<-EOF
 		Invalid Option: $option
@@ -407,6 +418,7 @@ print_help() { option=$1
 . /etc/abf/abf.conf || exit 1
 
 safety_checks
+permission_checks
 
 while [[ $1 ]]; do
 	case "$1" in
@@ -456,9 +468,9 @@ while [[ $1 ]]; do
 	shift
 done
 
-get_stale_pkgs
+#get_stale_pkgs
 #build_pkgs "tiobench yaourt" aurbin i686
-#build_all
+build_all
 #clean_repos
 #rebuild_chroots
 #test_chroots

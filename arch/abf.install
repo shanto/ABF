@@ -5,6 +5,7 @@ pre_install()
 
 post_install()
 {
+	chown -R abf:abf /var/abf /var/cache/abf /etc/abf/repo.d
 	echo " ==> Add build user to the group \"abf\":"
 	echo "    # gpasswd -a <build-user> abf"
 	echo " ==> Add this line in /etc/pam.d/schroot:"
@@ -15,7 +16,7 @@ post_install()
 post_remove()
 {
 	echo " ==> Purging all members of the group \"abf\""
-	groupmems -p abf
+	groupmems -p -g abf
 	echo " ==> Deleting the group \"abf\""
 	userdel abf
 }

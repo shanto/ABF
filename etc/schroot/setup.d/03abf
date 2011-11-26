@@ -6,27 +6,31 @@
 # this script is only for ABF chroots
 [[ $CHROOT_NAME =~ ^abf ]] || exit 0
 
-[[ $STAGE = 'setup-stop' ]] && exit 0
-
 . /etc/abf/abf.conf || exit 1
 
-[[ "$CHROOT_BTRFS_SOURCE_SUBVOLUME" ]] && {
-	BTRFS_DIR=$(dirname $CHROOT_BTRFS_SOURCE_SUBVOLUME)
-	BTRFS_SUB=$(basename $CHROOT_BTRFS_SOURCE_SUBVOLUME)
+# work out btrfs mount locations from env
+[[ -n "$CHROOT_BTRFS_SOURCE_SUBVOLUME" ]] && {
+	BTRFS_SUB=$CHROOT_BTRFS_SOURCE_SUBVOLUME
+	BTRFS_DIR=$(dirname $BTRFS_SUB)
 }
-[[ -z $BTRFS_DIR ]] && {
-	BTRFS_DIR=$(dirname $CHROOT_DIRECTORY)
-	BTRFS_SUB=$(basename $CHROOT_DIRECTORY)
+[[ -n $CHROOT_BTRFS_SNAPSHOT_NAME ]] && {
+	BTRFS_SNAP=$(dirname $CHROOT_BTRFS_SNAPSHOT_NAME);
+	BTRFS_DIR=$(dirname $BTRFS_SNAP)
+}
+[[ -n $CHROOT_DIRECTORY ]] && {
+	BTRFS_SUB=$CHROOT_DIRECTORY
+	BTRFS_DIR=$(dirname $BTRFS_SUB)
 }
 
-[[ -z $BTRFS_DIR || $BTRFS_DIR = '/' || $BTRFS_DIR = '' ]] && (
-	#fatal "Bad schroot config";
-	exit 1
-)
+#echo $BTRFS_DIR:$BTRFS_SUB:$BTRFS_SNAP
+
+[[ -z $BTRFS_DIR || $BTRFS_DIR = '/' || ! -d $BTRFS_DIR ]] && exit 1
 
 BTRFS_IMG=$VAR_DIR/chroots.btrfs
 
 [[ $STAGE = 'setup-start' ]] && {
+	[[ -z $BTRFS_SUB ]] && exit 1
+	
 	# FS setup
 	mkdir -p /tmp/abf && chown -R $AUTH_RUSER:$AUTH_RGROUP /tmp/abf
 	
@@ -47,17 +51,17 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 		mount | grep -qe "$BTRFS_DIR" || {
 			mount -o loop,compress=lzo $BTRFS_IMG $BTRFS_DIR || exit 1
 		}
-		[[ ! -d $CHROOT_BTRFS_SNAPSHOT_DIRECTORY && ! -z $CHROOT_BTRFS_SNAPSHOT_DIRECTORY ]] && (
-			mkdir -p $CHROOT_BTRFS_SNAPSHOT_DIRECTORY
+		[[ ! -d $BTRFS_SNAP && ! -z $BTRFS_SNAP ]] && (
+			mkdir -p $BTRFS_SNAP
 		)
-		[[ -d ${BTRFS_DIR}/${BTRFS_SUB} ]] || (
-			btrfs subvolume create ${BTRFS_DIR}/${BTRFS_SUB}
-			chmod 0755 ${BTRFS_DIR}/${BTRFS_SUB}
+		[[ -d ${BTRFS_SUB} ]] || (
+			btrfs subvolume create ${BTRFS_SUB}
+			chmod 0755 ${BTRFS_SUB}
 			echo "Making Arch Linux chroot filesystem..."
 			if [[ $CHROOT_NAME == 'abf32' ]]; then
-				setarch i386 /usr/sbin/mkarchroot -f -C /etc/abf/pacman-i686.conf ${BTRFS_DIR}/${BTRFS_SUB}/ ${BASE_PKGS[$CHROOT_NAME]}
+				setarch i386 /usr/sbin/mkarchroot -f -C /etc/abf/pacman-i686.conf ${BTRFS_SUB}/ ${BASE_PKGS[$CHROOT_NAME]}
 			else
-				/usr/sbin/mkarchroot -f -C /etc/abf/pacman-x86_64.conf ${BTRFS_DIR}/${BTRFS_SUB}/ ${BASE_PKGS[$CHROOT_NAME]}
+				/usr/sbin/mkarchroot -f -C /etc/abf/pacman-x86_64.conf ${BTRFS_SUB}/ ${BASE_PKGS[$CHROOT_NAME]}
 			fi
 		)
 	)

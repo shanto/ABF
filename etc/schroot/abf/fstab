@@ -2,12 +2,13 @@
 # Note that the mount point will be prefixed by the chroot path
 # (CHROOT_PATH)
 #
-# <file system>			<mount point>			<type>	<options>				<dump>	<pass>
-proc					/proc					proc	defaults
-sysfs					/sys					sysfs	defaults
-dev						/dev					tmpfs	mode=0755,size=10M,nosuid
-shm						/dev/shm				tmpfs	nodev,nosuid,size=128M
-devpts					/dev/pts				devpts	newinstance,ptmxmode=666
-/tmp/abf				/tmp/abf				none	rw,bind
-/var/cache/pacman/pkg	/var/cache/pacman/pkg	none	rw,bind
-/tmp/abf/customizepkg.d	/etc/customizepkg.d		none	rw,bind
+# <file system>					<mount point>			<type>	<options>				<dump>	<pass>
+proc							/proc					proc	defaults
+sysfs							/sys					sysfs	defaults
+dev								/dev					tmpfs	mode=0755,size=10M,nosuid
+shm								/dev/shm				tmpfs	nodev,nosuid,size=128M
+devpts							/dev/pts				devpts	newinstance,ptmxmode=666
+/tmp/abf						/tmp/abf				none	rw,bind
+/var/cache/pacman/pkg			/var/cache/pacman/pkg	none	rw,bind
+/var/abf/customizepkg.d			/etc/customizepkg.d		none	rw,bind
+/etc/schroot/abf/sudoers.d		/etc/sudoers.d			none	rw,bind
