@@ -1,0 +1,2 @@
+# Allow users in %abf group to execute abf program as "abf" user
+%abf ALL=(abf) NOPASSWD: ALL

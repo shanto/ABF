@@ -1,0 +1,2 @@
+# Allow the 'abf' user to execute pacman as root
+abf ALL=(root) NOPASSWD: /usr/bin/pacman
