@@ -6,19 +6,25 @@ pre_install()
 post_install()
 {
 	chown -R abf:abf /var/abf /var/cache/abf /etc/abf/repo.d
-	echo " ==> Add build user to the group \"abf\":"
-	echo "    # gpasswd -a <build-user> abf"
-	echo " ==> Add this line in /etc/pam.d/schroot:"
-	echo "    # echo \"auth sufficient pam_wheel.so group=abf\" >> /etc/pam.d/schroot"
-	echo "    NOTE: Build user must logout->login for new group membership to take effect."
+	echo " ==> Add build user to the group 'abf'..."
+	echo "     # gpasswd -a <build-user> abf"
+	#echo " ==> Add this line in /etc/pam.d/schroot:"
+	#echo "     # echo \"auth sufficient pam_wheel.so group=abf\" >> /etc/pam.d/schroot"
+	#echo "     NOTE: Build user must logout->login for new group membership to take effect."
 }
 
 post_remove()
 {
-	echo " ==> Purging all members of the group \"abf\""
-	groupmems -p -g abf
-	echo " ==> Deleting the group \"abf\""
-	userdel abf
+	echo " ==> Cleaning up cache directories..."
+	var_dirs=('/var/cache/abf' '/var/abf/customizepkg.d')
+	rm -rf $var_dirs
+	echo " ==> Removing 'abf' group and user..."
+	groupmems -p -g abf; userdel abf
+	repo_dir=/var/abf/repo
+	echo " ==> Cleaning up repo directory..."
+	num_pkg=$(find $repo_dir -name '*.pkg.tar.*' | wc -l)
+	[[ $num_pkg == 0 ]] && rm -rf $repo_dir
+	echo "     You still have $num_pkg packages inside $repo_dir. Move or delete them manually."
 }
 
 post_upgrade()

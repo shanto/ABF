@@ -30,14 +30,13 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 
 [[ $STAGE = 'setup-start' ]] && {
 	[[ -z $BTRFS_SUB ]] && exit 1
-	
+
 	# FS setup
 	mkdir -p /tmp/abf && chown -R $AUTH_RUSER:$AUTH_RGROUP /tmp/abf
-	
+
 	# Initialize chroot image
-	declare -A BASE_PKGS
-	BASE_PKGS[abf32]="base base-devel sudo pacman yaourt xdelta3 unzip subversion git bzr"
-	BASE_PKGS[abf64]="${BASE_PKGS[abf32]} multilib-devel"
+	BASE_PKGS=(base base-devel sudo pacman yaourt xdelta3 unzip subversion git bzr ${EXTRA_PKGS[@]})
+
 
 	[[ -d $BTRFS_DIR ]] || mkdir -p $BTRFS_DIR
 	[[ -f $BTRFS_IMG ]] || (
@@ -45,7 +44,7 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 		dd if=/dev/zero of=$BTRFS_IMG bs=1M count=$CHROOT_IMG_SIZE
 		mkfs.btrfs -L 'ABF_CHROOTS' $BTRFS_IMG
 	)
-	
+
 	[[ -f $BTRFS_IMG ]] && [[ -d $BTRFS_DIR ]] && (
 		# "Mounting BTRFS Image..."
 		mount | grep -qe "$BTRFS_DIR" || {
@@ -58,10 +57,10 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 			btrfs subvolume create ${BTRFS_SUB}
 			chmod 0755 ${BTRFS_SUB}
 			echo "Making Arch Linux chroot filesystem..."
-			if [[ $CHROOT_NAME == 'abf32' ]]; then
-				setarch i386 /usr/sbin/mkarchroot -f -C /etc/abf/pacman-i686.conf ${BTRFS_SUB}/ ${BASE_PKGS[$CHROOT_NAME]}
+			if [[ $CHROOT_NAME == 'abf64' ]]; then
+				setarch i386 /usr/sbin/mkarchroot -f -C /etc/abf/pacman-i686.conf ${BTRFS_SUB}/ ${BASE_PKGS[@]} multilib-devel
 			else
-				/usr/sbin/mkarchroot -f -C /etc/abf/pacman-x86_64.conf ${BTRFS_SUB}/ ${BASE_PKGS[$CHROOT_NAME]}
+				/usr/sbin/mkarchroot -f -C /etc/abf/pacman-x86_64.conf ${BTRFS_SUB}/ ${BASE_PKGS[@]}
 			fi
 		)
 	)
