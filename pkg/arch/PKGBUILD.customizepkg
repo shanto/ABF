@@ -2,7 +2,7 @@
 # Author:		Shanto <shanto@hotmail.com>
 
 pkgname=abf-customizepkg
-pkgver=20111114
+pkgver=20111126
 pkgrel=1
 pkgdesc="Fake customizepkg for use by ABF inside build chroots"
 arch=('i686' 'x86_64')

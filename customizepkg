@@ -21,5 +21,17 @@
 NAME='abf-customizepkg'
 VERSION='0.1'
 
-echo "Processing modification request for... Not Implemented!"
+. PKGBUILD || { echo "PKGBUILD for customizaton not found"; exit 1 }
 
+${pkgbase:-$pkgname}
+
+echo "Processing modification request for $pkgbase... "
+
+[[ -x /etc/customizepkg.d/$pkgbase ]] || {
+	echo /etc/customizepkg.d/$pkgbase is not executable.
+	exit 1
+}
+
+/etc/customizepkg.d/$pkgbase
+
+echo "Done."
