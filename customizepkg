@@ -32,6 +32,4 @@ echo "Processing modification request for $pkgbase... "
 	exit 1
 }
 
-/etc/customizepkg.d/$pkgbase
-
-echo "Done."
+/etc/customizepkg.d/$pkgbase && echo "Done."

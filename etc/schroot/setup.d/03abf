@@ -4,7 +4,9 @@
 . "$SETUP_DATA_DIR/common-functions"
 
 # this script is only for ABF chroots
-[[ $CHROOT_NAME =~ ^abf ]] || return 0
+[[ $CHROOT_NAME =~ ^abf ]] || exit 0
+
+[[ $STAGE = 'setup-stop' ]] && exit 0
 
 . /etc/abf/abf.conf || exit 1
 
@@ -18,7 +20,7 @@
 }
 
 [[ -z $BTRFS_DIR || $BTRFS_DIR = '/' || $BTRFS_DIR = '' ]] && (
-	fatal "Bad schroot config";
+	#fatal "Bad schroot config";
 	exit 1
 )
 
@@ -26,7 +28,7 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 
 [[ $STAGE = 'setup-start' ]] && {
 	# FS setup
-	mkdir -p /tmp/abf && chmod 0777 /tmp/abf
+	mkdir -p /tmp/abf && chown -R $AUTH_RUSER:$AUTH_RGROUP /tmp/abf
 	
 	# Initialize chroot image
 	declare -A BASE_PKGS
@@ -42,7 +44,9 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 	
 	[[ -f $BTRFS_IMG ]] && [[ -d $BTRFS_DIR ]] && (
 		# "Mounting BTRFS Image..."
-		mount -o loop,compress=lzo $BTRFS_IMG $BTRFS_DIR || exit
+		mount | grep -qe "$BTRFS_DIR" || {
+			mount -o loop,compress=lzo $BTRFS_IMG $BTRFS_DIR || exit 1
+		}
 		[[ ! -d $CHROOT_BTRFS_SNAPSHOT_DIRECTORY && ! -z $CHROOT_BTRFS_SNAPSHOT_DIRECTORY ]] && (
 			mkdir -p $CHROOT_BTRFS_SNAPSHOT_DIRECTORY
 		)

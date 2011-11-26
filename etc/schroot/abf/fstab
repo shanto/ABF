@@ -10,3 +10,4 @@ shm						/dev/shm				tmpfs	nodev,nosuid,size=128M
 devpts					/dev/pts				devpts	newinstance,ptmxmode=666
 /tmp/abf				/tmp/abf				none	rw,bind
 /var/cache/pacman/pkg	/var/cache/pacman/pkg	none	rw,bind
+/tmp/abf/customizepkg.d	/etc/customizepkg.d		none	rw,bind

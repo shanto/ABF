@@ -4,7 +4,7 @@
 . "$SETUP_DATA_DIR/common-functions"
 
 # this script is only for ABF chroots
-[[ $CHROOT_NAME =~ ^abf ]] || return 0
+[[ $CHROOT_NAME =~ ^abf ]] || exit 0
 
 [[ $STAGE = 'setup-start' ]] && {
 	mknod -m 666 "${CHROOT_PATH}/dev/null" c 1 3

@@ -34,8 +34,28 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 	[[ -d ${repo_conf} ]] || mkdir -p ${repo_conf}
 	[[ -d ${repo_dest}/any ]] || mkdir -p ${repo_dest}/any
 	[[ -d ${repo_dest}/$arch ]] || mkdir -p ${repo_dest}/$arch
+	
+	#trap "rm -rf $repo_out; rm -rf $tmp_abf" TERM HUP QUIT INT ERR
 
-	schroot -c abf-$arch -d /tmp -u root -- yaourt --export ${repo_out} --noconfirm -Sy ${packages}
+	# put customizepkg scripts in place
+	install -d $tmp_abf/customizepkg.d && \
+	install $repo_conf/* $tmp_abf/customizepkg.d
+
+	schroot_session=$(schroot -b -c abf-$arch)
+	#trap "[[ -n \$(schroot -l -c $schroot_session 2>/dev/null) ]] && \
+	#	 schroot -e -c $schroot_session" TERM HUP QUIT INT ERR
+
+	# build packages and deps
+	schroot -r -c $schroot_session -d /tmp -u root --\
+		yaourt --export ${repo_out} --noconfirm -Sy ${packages}
+	# then build ABS packages (skipped earlier)
+	schroot -r -c $schroot_session -d /tmp -u root --\
+		bash -c "abs_pkgs=\$(package-query -S -f "%n" ${packages}); \
+		[[ -n \$abs_pkgs ]] && \
+			yaourt --export ${repo_out} --noconfirm -Sb \$abs_pkgs"
+
+	[[ -n $(schroot -l -c $schroot_session 2>/dev/null) ]] && \
+		 schroot -e -c $schroot_session
 
 	find ${repo_out} -name '*.pkg.tar.*' -printf "%f %p\n" | \
 	while read pkg_file pkg_path; do
@@ -47,7 +67,8 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 		repo_db=${repo_dest}/$arch/${repo_name}.db.tar.gz
 
 		if [[ $pkg_arch == 'any' ]]; then
-			if [[ $(stat -c '%Y' $pkg_dest_any) == $(stat -c '%Y' $pkg_conf) ]]; then
+			if [[ $(stat -c '%Y' $pkg_dest_any 2>/dev/null) ==\
+			$(stat -c '%Y' $pkg_conf 2>/dev/null) ]]; then
 				echo "Skipping $pkg_name in ${repo_name} (any) repository... "
 				rm ${pkg_path}
 			else
@@ -69,8 +90,7 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 		fi
 	done
 
-	rm -rf $repo_out
-	rm -rf $tmp_abf
+	rm -rf $repo_out; rm -rf $tmp_abf
 }
 
 get_stale_pkgs() {
@@ -105,16 +125,16 @@ get_stale_pkgs() {
 			# missing package file?
 			for arch in "${ARCH_AVAIL[@]}"; do
 				[[ -f $REPO_DIR/$repo_name/$arch/$abs_pkg ]] || {
-					echo $pkg_name && continue 2
+					echo "$repo_name/$pkg_name" && continue 2
 				}
 			done
 			# timestamp comparison against ABS
 			[[ -n $(find $abs_dir -cnewer $pkg_conf) ]] && {
-				echo $pkg_name && continue
+				echo "$repo_name/$pkg_name" && continue
 			}
 			# timestamp comparison against pkg
 			ts_gt $(stat -c '%Y' $pkg_conf) $(stat -c '%Y' "$abs_pkg") && {
-				echo $pkg_name && continue
+				echo "$repo_name/$pkg_name" && continue
 			}
 		}
 
@@ -123,19 +143,26 @@ get_stale_pkgs() {
 			read aur_name aur_ver aur_ts <<< ${aur_result[$pkg_name]}
 			# timestamp comparison against AUR
 			[[ -n $aur_ts ]] && ts_gt $aur_ts $(stat -c '%Y' $pkg_conf) && {
-				echo $pkg_name && continue
+				echo "$repo_name/$pkg_name" && continue
+			}
+			
+			# work out package version and check for devel packages
+			pkg_ver=$aur_ver
+			pkgbuild_url=$AUR_URL/packages/${pkg_name:0:2}/${pkg_name}/PKGBUILD
+			dev_ptrn='^_svn(trunk|mod)|_cvs(root|mod)|_hg(root|repo)|_darcs(mod|trunk)|_bzr(trunk|mod)|_git(root|name)='
+			[[ $( wget -q -O - "$pkgbuild_url" | grep -Pe "$dev_ptrn" | wc -l) == 2 ]] && {
+				pkg_ver=$(date +%Y%m%d)
 			}
 		
 			# .pkg.tar.* file check
-			pkg_ver=${abs_ver:=$aur_ver}
 			for arch in "${ARCH_AVAIL[@]}"; do
 				pkg_file=$(ls -1 $REPO_DIR/$repo_name/$arch/$pkg_name-$pkg_ver-*.pkg.tar.* 2>/dev/null)
 				[[ -n $pkg_file && -f $(readlink -m $pkg_file) ]] || {
-					echo $pkg_name && continue 2
+					echo "$repo_name/$pkg_name" && continue 2
 				}
 				# timestamp comparison against pkg
 				ts_gt $(stat -c '%Y' $pkg_conf) $(stat -c '%Y' "$pkg_file") && {
-					echo $pkg_name && continue 2
+					echo "$repo_name/$pkg_name" && continue 2
 				}
 			done
 		}
@@ -222,14 +249,17 @@ clean_repos() {
 }
 
 build_all() {
-	echo "I should check and build per repo!" && exit
-	packages=$(get_stale_pkgs | tr '\n' ' ')
-	[[ -n "$packages" ]] || {
+	report=$(get_stale_pkgs | sort -u)
+	repos=$(echo "$report" | cut -d/ -f1 | sort -u | tr '\n' ' ')
+	[[ -n "$repos" ]] || {
 		echo "No package found for building."
 		exit 0
 	}
-	for arch in "${ARCH_AVAIL[@]}"; do
-		 build_pkgs aurbin $arch "$packages"
+	for repo in $repos; do
+		packages=$(echo "$report" | grep $repo/ | cut -d/ -f2)
+		for arch in "${ARCH_AVAIL[@]}"; do
+			build_pkgs $repo $arch $packages
+		done
 	done
 }
 
@@ -421,7 +451,7 @@ done
 
 #get_stale_pkgs
 #build_pkgs "tiobench yaourt" aurbin i686
-#build_all
+build_all
 #clean_repos
 #rebuild_chroots
 #test_chroots
