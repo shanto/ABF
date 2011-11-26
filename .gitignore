@@ -1,6 +1,7 @@
 *.btrfs
 .project
-var/abf/repo/*
-etc/abf/repo.d/*
 arch/*/*
 arch/*.tar.*
+etc/abf/repo.d/*
+var/abf/repo/*
+var/cache/*/*/*/*

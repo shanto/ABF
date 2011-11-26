@@ -94,7 +94,6 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 }
 
 get_stale_pkgs() {
-	abs_dir=$(mktemp --tmpdir=/tmp -d abs.XXX)
 	cd $REPO_CONF
 
 	pkg_names_confs="$(find $REPO_CONF -maxdepth 2 -mindepth 2 -printf "%f %P\n")"
@@ -113,7 +112,8 @@ get_stale_pkgs() {
 		aur_result[$pkg_name]="$pkg_name $pkg_ver $pkg_ts"
 	done <<< "$(package-query --aur --format "%n %v %L" $pkg_names)"
 	
-	ABSROOT=$abs_dir abs "${abs_repo_pkgs[@]}" &>/dev/null
+	mkdir -p $ABS_CACHE
+	ABSROOT=$ABS_CACHE abs "${abs_repo_pkgs[@]}" &>/dev/null
 	
 	while read pkg_name pkg_conf; do [[ -n $pkg_name ]] || continue
 		repo_conf=$(dirname $pkg_conf)
@@ -121,7 +121,7 @@ get_stale_pkgs() {
 
 		# Check ABS
 		read abs_name abs_ver abs_pkg abs_repo <<< ${abs_result[$pkg_name]}
-		[[ -n ${abs_result[$pkg_name]} && -d $abs_dir/$abs_repo/$pkg_name ]] && {
+		[[ -n ${abs_result[$pkg_name]} && -d $ABS_CACHE/$abs_repo/$pkg_name ]] && {
 			# missing package file?
 			for arch in "${ARCH_AVAIL[@]}"; do
 				[[ -f $REPO_DIR/$repo_name/$arch/$abs_pkg ]] || {
@@ -129,7 +129,7 @@ get_stale_pkgs() {
 				}
 			done
 			# timestamp comparison against ABS
-			[[ -n $(find $abs_dir -cnewer $pkg_conf) ]] && {
+			[[ -n $(find $ABS_CACHE -cnewer $pkg_conf) ]] && {
 				echo "$repo_name/$pkg_name" && continue
 			}
 			# timestamp comparison against pkg
@@ -146,11 +146,18 @@ get_stale_pkgs() {
 				echo "$repo_name/$pkg_name" && continue
 			}
 			
+			# cached PKGBUILD. Shame, there's no AUR rsync server
+			pkgbuild=$AUR_CACHE/$pkg_name/PKGBUILD
+			pkgbuild_url=$AUR_URL/packages/${pkg_name:0:2}/${pkg_name}/PKGBUILD
+			[[ -f "$pkgbuild" && $(stat -c '%Y' $pkgbuild) == $aur_ts ]] || {
+				mkdir -p $(dirname $pkgbuild)
+				wget -qNO $pkgbuild $pkgbuild_url
+			}
+			
 			# work out package version and check for devel packages
 			pkg_ver=$aur_ver
-			pkgbuild_url=$AUR_URL/packages/${pkg_name:0:2}/${pkg_name}/PKGBUILD
 			dev_ptrn='^_svn(trunk|mod)|_cvs(root|mod)|_hg(root|repo)|_darcs(mod|trunk)|_bzr(trunk|mod)|_git(root|name)='
-			[[ $( wget -q -O - "$pkgbuild_url" | grep -Pe "$dev_ptrn" | wc -l) == 2 ]] && {
+			[[ $( grep -Pe "$dev_ptrn" $pkgbuild | wc -l) == 2 ]] && {
 				pkg_ver=$(date +%Y%m%d)
 			}
 		
@@ -449,9 +456,9 @@ while [[ $1 ]]; do
 	shift
 done
 
-#get_stale_pkgs
+get_stale_pkgs
 #build_pkgs "tiobench yaourt" aurbin i686
-build_all
+#build_all
 #clean_repos
 #rebuild_chroots
 #test_chroots
