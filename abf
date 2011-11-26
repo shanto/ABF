@@ -48,7 +48,7 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 	# build packages and deps
 	schroot -r -c $schroot_session -d /tmp -u root --\
 		yaourt --export ${repo_out} --noconfirm -Sy ${packages}
-	# then build ABS packages (skipped earlier)
+	# then build ABS packages
 	schroot -r -c $schroot_session -d /tmp -u root --\
 		bash -c "abs_pkgs=\$(package-query -S -f "%n" ${packages}); \
 		[[ -n \$abs_pkgs ]] && \
