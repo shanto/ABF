@@ -1,2 +1,0 @@
-# hide ABF mounted chroots from file managers; disable polling (prevent delayed unmount)
-ENV{ID_FS_LABEL}=="ABF*CHROOT*", ENV{UDISKS_PRESENTATION_NOPOLICY}="1", ENV{UDISKS_PRESENTATION_HIDE}="1", ENV{UDISKS_DISABLE_POLLING}="1"

@@ -18,7 +18,7 @@
 }
 
 [[ -z $BTRFS_DIR || $BTRFS_DIR = '/' || $BTRFS_DIR = '' ]] && (
-	echo Bad schroot config;
+	fatal "Bad schroot config";
 	exit 1
 )
 
@@ -61,8 +61,12 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 
 [[ $STAGE = 'setup-stop' ]] && {
 	# Unmounting BTRFS Image...
+	for i in {1..5}; do
+		mount | grep -qe "$BTRFS_DIR" || break
+		umount "$BTRFS_DIR" 2>/dev/null && break
+		sleep 1
+	done
 	mount | grep -qe "$BTRFS_DIR" && {
-		#sleep 2
-		umount "$BTRFS_DIR"
+		fatal "Failed to unmount $BTRFS_DIR. Do it manually now."
 	}
 } || true

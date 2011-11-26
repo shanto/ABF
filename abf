@@ -221,11 +221,8 @@ clean_repos() {
 	echo "Cleanup complete."
 }
 
-pkgbuild_mod() {
-	echo "Processing modification request for \"$1\"... Not Implemented!"
-}
-
 build_all() {
+	echo "I should check and build per repo!" && exit
 	packages=$(get_stale_pkgs | tr '\n' ' ')
 	[[ -n "$packages" ]] || {
 		echo "No package found for building."
