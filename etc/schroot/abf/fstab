@@ -11,4 +11,3 @@ devpts							/dev/pts				devpts	newinstance,ptmxmode=666
 /tmp/abf						/tmp/abf				none	rw,bind
 /var/cache/pacman/pkg			/var/cache/pacman/pkg	none	rw,bind
 /var/abf/customizepkg.d			/etc/customizepkg.d		none	rw,bind
-/etc/schroot/abf/sudoers.d		/etc/sudoers.d			none	rw,bind

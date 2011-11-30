@@ -31,12 +31,11 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 [[ $STAGE = 'setup-start' ]] && {
 	[[ -z $BTRFS_SUB ]] && exit 1
 
-	# FS setup
+	# setup shared tmp
 	mkdir -p /tmp/abf && chown -R $AUTH_RUSER:$AUTH_RGROUP /tmp/abf
-
+	
 	# Initialize chroot image
 	BASE_PKGS=(base base-devel sudo pacman yaourt xdelta3 unzip subversion git bzr ${EXTRA_PKGS[@]})
-
 
 	[[ -d $BTRFS_DIR ]] || mkdir -p $BTRFS_DIR
 	[[ -f $BTRFS_IMG ]] || (
@@ -63,8 +62,15 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 				/usr/sbin/mkarchroot -f -C /etc/abf/pacman-x86_64.conf ${BTRFS_SUB}/ ${BASE_PKGS[@]}
 			fi
 		)
+
+		# copy support files
+		[[ -d $BTRFS_SUB && ! -f $BTRFS_SUB/etc/sudoers.d/abf ]] && {
+			install -m 0400 {/etc/schroot/abf/fs,$BTRFS_SUB}/etc/sudoers.d/abf
+			install -m 0755 {/etc/schroot/abf/fs,$BTRFS_SUB}/usr/bin/customizepkg
+		}
 	)
-} || true
+	exit 0
+}
 
 [[ $STAGE = 'setup-stop' ]] && {
 	# Unmounting BTRFS Image...
@@ -76,4 +82,5 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 	mount | grep -qe "$BTRFS_DIR" && {
 		fatal "Failed to unmount $BTRFS_DIR. Do it manually now."
 	}
-} || true
+	exit 0
+}

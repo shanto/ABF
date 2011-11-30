@@ -8,9 +8,6 @@ post_install()
 	chown -R abf:abf /var/abf /var/cache/abf /etc/abf/repo.d
 	echo " ==> Add build user to the group 'abf'..."
 	echo "     # gpasswd -a <build-user> abf"
-	#echo " ==> Add this line in /etc/pam.d/schroot:"
-	#echo "     # echo \"auth sufficient pam_wheel.so group=abf\" >> /etc/pam.d/schroot"
-	#echo "     NOTE: Build user must logout->login for new group membership to take effect."
 }
 
 post_remove()

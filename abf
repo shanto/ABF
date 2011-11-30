@@ -41,14 +41,20 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 	rm -rf $ABF_CPKG/*
 	install $repo_conf/* $ABF_CPKG
 
+	# upgrade the source system
+	schroot -c source:abf-$arch -d $tmp_abf --\
+		yaourt --noconfirm -Syu
+
+	# initiate a disposible session
 	schroot_session=$(schroot -b -c abf-$arch)
 	#trap "[[ -n \$(schroot -l -c $schroot_session 2>/dev/null) ]] && \
 	#	 schroot -e -c $schroot_session" TERM HUP QUIT INT ERR
 
 	# build packages and deps
 	schroot -r -c $schroot_session -d $tmp_abf --\
-		yaourt --export ${repo_out} --noconfirm -Sy ${packages}
-	# then build ABS packages (again, because -b for deps is too much)
+		yaourt --export ${repo_out} --noconfirm -S ${packages}
+
+	# then build ABS-only packages (which are skipped above)
 	schroot -r -c $schroot_session -d $tmp_abf --\
 		bash -c "abs_pkgs=\$(package-query -S -f "%n" ${packages}); \
 		[[ -n \$abs_pkgs ]] && \
