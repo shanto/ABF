@@ -1,6 +1,6 @@
 pre_install()
 {
-	useradd abf -UM -d /var/abf
+	useradd abf -rUM -d /var/abf
 }
 
 post_install()
@@ -15,16 +15,20 @@ post_install()
 
 post_remove()
 {
-	echo " ==> Cleaning up cache directories..."
 	var_dirs=('/var/cache/abf' '/var/abf/customizepkg.d')
+	repo_dir=/var/abf/repo
+
+	echo " ==> Cleaning up cache directories..."
 	rm -rf $var_dirs
+
 	echo " ==> Removing 'abf' group and user..."
 	groupmems -p -g abf; userdel abf
-	repo_dir=/var/abf/repo
+
 	echo " ==> Cleaning up repo directory..."
 	num_pkg=$(find $repo_dir -name '*.pkg.tar.*' | wc -l)
-	[[ $num_pkg == 0 ]] && rm -rf $repo_dir
-	echo "     You still have $num_pkg packages inside $repo_dir. Move or delete them manually."
+
+	[[ $num_pkg == 0 ]] && rm -rf $repo_dir || \
+		echo " You have $num_pkg packages inside $repo_dir. Move or delete them manually and remove $(dirname $repo_dir) afterwards."
 }
 
 post_upgrade()
