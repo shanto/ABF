@@ -65,6 +65,7 @@ BTRFS_IMG=$VAR_DIR/chroots.btrfs
 
 		# copy support files
 		[[ -d $BTRFS_SUB && ! -f $BTRFS_SUB/etc/sudoers.d/abf ]] && {
+			install -m 0644 {/etc/schroot/abf/fs,$BTRFS_SUB}/etc/yaourtrc
 			install -m 0400 {/etc/schroot/abf/fs,$BTRFS_SUB}/etc/sudoers.d/abf
 			install -m 0755 {/etc/schroot/abf/fs,$BTRFS_SUB}/usr/bin/customizepkg
 		}

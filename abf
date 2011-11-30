@@ -23,23 +23,24 @@ VERSION='0.1'
 
 build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 	echo "Building packages ($packages) for ${repo_name} (${arch})..."
+	
 	tmp_abf=/tmp/abf && mkdir -p $tmp_abf
+	[[ -w $tmp_abf ]] || { echo "ERROR: $tmp_abf is not writable."; exit 1; }
+	
 	repo_out=$(mktemp --tmpdir=${tmp_abf} -d ${repo_name}.$arch.XXX 2>/dev/null)
-	repo_root=$VAR_DIR/repo
-	repo_dest=$repo_root/$repo_name
-	repo_conf=$REPO_CONF/$repo_name
-
-	[[ -w $repo_root ]] || { echo "ERROR: $repo_root must be writable."; exit; }
-	[[ -w $tmp_abf ]] || { echo "ERROR: $tmp_abf must be writable."; exit; }
-	[[ -d ${repo_conf} ]] || mkdir -p ${repo_conf}
+	repo_dest=$REPO_DIR/$repo_name
 	[[ -d ${repo_dest}/any ]] || mkdir -p ${repo_dest}/any
 	[[ -d ${repo_dest}/$arch ]] || mkdir -p ${repo_dest}/$arch
+	
+	repo_conf=$REPO_CONF/$repo_name
+	[[ -d $repo_conf ]] || mkdir -p $repo_conf
 	
 	#trap "rm -rf $repo_out; rm -rf $tmp_abf" TERM HUP QUIT INT ERR
 
 	# put customizepkg scripts in place
-	rm -rf $ABF_CPKG/*
-	install $repo_conf/* $ABF_CPKG
+	cpkg_conf=$VAR_DIR/customizepkg.d
+	[[ -d $cpkg_conf ]] || mkdir -p $cpkg_conf
+	rm -rf $cpkg_conf/*; install $repo_conf/* $cpkg_conf
 
 	# upgrade the source system
 	schroot -c source:abf-$arch -d $tmp_abf --\
@@ -52,13 +53,7 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 
 	# build packages and deps
 	schroot -r -c $schroot_session -d $tmp_abf --\
-		yaourt --export ${repo_out} --noconfirm -S ${packages}
-
-	# then build ABS-only packages (which are skipped above)
-	schroot -r -c $schroot_session -d $tmp_abf --\
-		bash -c "abs_pkgs=\$(package-query -S -f "%n" ${packages}); \
-		[[ -n \$abs_pkgs ]] && \
-			yaourt --export ${repo_out} --noconfirm -Sb \$abs_pkgs"
+		yaourt --export ${repo_out} --noconfirm -Sb --aur ${packages}
 
 	[[ -n $(schroot -l -c $schroot_session 2>/dev/null) ]] && \
 		 schroot -e -c $schroot_session
@@ -96,7 +91,7 @@ build_pkgs() { repo_name=$1 ; arch=$2 ; packages=$3
 		fi
 	done
 
-	rm -rf $repo_out; rm -rf $tmp_abf; $ABF_CPKG/*
+	rm -rf $repo_out; rm -rf $tmp_abf; $VAR_DIR/customizepkg.d/*
 }
 
 get_stale_pkgs() {
@@ -128,20 +123,22 @@ get_stale_pkgs() {
 		# Check ABS
 		read abs_name abs_ver abs_pkg abs_repo <<< ${abs_result[$pkg_name]}
 		[[ -n ${abs_result[$pkg_name]} && -d $ABS_CACHE/$abs_repo/$pkg_name ]] && {
-			# missing package file?
-			for arch in "${ARCH_AVAIL[@]}"; do
-				[[ -f $REPO_DIR/$repo_name/$arch/$abs_pkg ]] || {
-					echo "$repo_name/$pkg_name" && continue 2
-				}
-			done
 			# timestamp comparison against ABS
 			[[ -n $(find $ABS_CACHE -cnewer $pkg_conf) ]] && {
 				echo "$repo_name/$pkg_name" && continue
 			}
-			# timestamp comparison against pkg
-			ts_gt $(stat -c '%Y' $pkg_conf) $(stat -c '%Y' "$abs_pkg") && {
-				echo "$repo_name/$pkg_name" && continue
-			}
+			for arch in "${ARCH_AVAIL[@]}"; do
+				pkg_file=$REPO_DIR/$repo_name/$arch/$abs_name-$abs_ver-*.pkg.tar.*
+				# missing package file?
+				[[ -f $(readlink -m $pkg_file) ]] || {
+					echo $REPO_DIR/$repo_name/$arch/$abs_name-$abs_ver-*.pkg.tar.*
+					echo "$repo_name/$pkg_name" && continue 2
+				}
+				# timestamp comparison against pkg
+				ts_gt $(stat -c '%Y' $pkg_conf) $(stat -c '%Y' $pkg_file) && {
+					echo "$repo_name/$pkg_name" && continue
+				}
+			done
 		}
 
 		# Then AUR
@@ -169,12 +166,12 @@ get_stale_pkgs() {
 		
 			# .pkg.tar.* file check
 			for arch in "${ARCH_AVAIL[@]}"; do
-				pkg_file=$(ls -1 $REPO_DIR/$repo_name/$arch/$pkg_name-$pkg_ver-*.pkg.tar.* 2>/dev/null)
+				pkg_file=$REPO_DIR/$repo_name/$arch/$pkg_name-$pkg_ver-*.pkg.tar.*
 				[[ -n $pkg_file && -f $(readlink -m $pkg_file) ]] || {
 					echo "$repo_name/$pkg_name" && continue 2
 				}
 				# timestamp comparison against pkg
-				ts_gt $(stat -c '%Y' $pkg_conf) $(stat -c '%Y' "$pkg_file") && {
+				ts_gt $(stat -c '%Y' $pkg_conf) $(stat -c '%Y' $pkg_file) && {
 					echo "$repo_name/$pkg_name" && continue 2
 				}
 			done
@@ -347,24 +344,42 @@ ts_eq() {
 	[[ $lag_local -eq 0 ]] && return 0
 }
 
-safety_checks() {
-	for sys_dir in $(package-query -Sf "%F" filesystem); do
-		[[ ${REPO_DIR} = "/${sys_dir%/}" || -z ${REPO_DIR} || ${REPO_DIR} = '/' ]] && {
-			echo "ERROR: \"${REPO_DIR}\" is not a valid value for REPO_DIR.\nCheck /etc/abf/abf.conf"
-			exit 1
-		}
-	done
-}
-
-permission_checks() {
+check_user() {
 	[[ $(id -un) == 'abf' ]] || {
-		cat <<- EOF
-		This program must be run as the 'abf' user.
-		Use "sudo -u abf -- $0" if running from terminal.
+		cat 1>&2 <<- EOF
+		This program must be run as the 'abf' user. e.g.
+		# sudo -u abf $0
 		For cron jobs, set it to run under the 'abf' user.
 		EOF
 		exit 1
 	}
+}
+
+check_conf() {
+	for dir in CONF_DIR REPO_CONF VAR_DIR REPO_DIR AUR_CACHE ABS_CACHE; do
+		for sys_dir in $(package-query -Sf "%F" filesystem); do
+			[[ "${!dir}" = "/${sys_dir%/}" || -z "${!dir}" || "${!dir}" = '/' ]] && {
+				cat 1>&2 <<- EOF
+					${!dir} is not a valid value for ${dir}.
+					Check and fix ${dir} in /etc/abf/abf.conf.
+				EOF
+				exit 1
+			}
+		done
+	done
+}
+
+check_perms() {
+	for dir in REPO_CONF VAR_DIR REPO_DIR AUR_CACHE ABS_CACHE; do
+		[[ -w ${!dir} ]] || {
+			cat 1>&2 <<- EOF
+				ERROR: ${!dir} is not writable.
+				Check if you have set ${dir} properly in /etc/abf/abf.conf,
+				and make this directory owned and writable by the abf user.
+			EOF
+			exit 1
+		}
+	done
 }
 
 print_help() { option=$1
@@ -421,10 +436,11 @@ print_help() { option=$1
 	[[ -n $option ]] && exit 1
 }
 
-. /etc/abf/abf.conf || exit 1
+. ${ABF_CONF:=/etc/abf/abf.conf} || exit 1
 
-safety_checks
-permission_checks
+check_user
+check_conf
+check_perms
 
 while [[ $1 ]]; do
 	case "$1" in
@@ -476,7 +492,7 @@ done
 
 #get_stale_pkgs
 #build_pkgs "tiobench yaourt" aurbin i686
-build_all
+#build_all
 #clean_repos
 #rebuild_chroots
 #test_chroots
